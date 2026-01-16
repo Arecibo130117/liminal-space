@@ -53,21 +53,26 @@ export class GPURenderer {
     });
 
     // 렌더 패스 디스크립터 준비
+    const colorAttachments: GPURenderPassColorAttachment[] = [{
+      view: undefined as any, // 프레임마다 업데이트
+      clearValue: { r: 0.05, g: 0.05, b: 0.1, a: 1.0 },
+      loadOp: 'clear',
+      storeOp: 'store'
+    }];
+    
     this.renderPassDescriptor = {
-      colorAttachments: [{
-        view: undefined as any, // 프레임마다 업데이트
-        clearValue: { r: 0.05, g: 0.05, b: 0.1, a: 1.0 },
-        loadOp: 'clear',
-        storeOp: 'store'
-      }]
+      colorAttachments: colorAttachments
     };
   }
 
   beginFrame() {
     const textureView = this.context.getCurrentTexture().createView();
     
-    if (this.renderPassDescriptor) {
-      this.renderPassDescriptor.colorAttachments[0].view = textureView;
+    if (this.renderPassDescriptor && this.renderPassDescriptor.colorAttachments) {
+      const colorAttachments = this.renderPassDescriptor.colorAttachments as GPURenderPassColorAttachment[];
+      if (colorAttachments.length > 0) {
+        colorAttachments[0].view = textureView;
+      }
     }
 
     this.commandEncoder = this.device.createCommandEncoder();
