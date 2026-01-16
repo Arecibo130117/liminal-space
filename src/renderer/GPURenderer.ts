@@ -24,13 +24,18 @@ export class GPURenderer {
       throw new Error('WebGPU 어댑터를 사용할 수 없습니다.');
     }
 
-    // 디바이스 요청
+    // 어댑터의 지원 제한 확인
+    const adapterLimits = adapter.limits;
+    
+    // 디바이스 요청 - 지원되는 제한 내에서만 요청
+    const requestedLimits: Record<string, number> = {
+      maxBindGroups: Math.min(8, adapterLimits.maxBindGroups),
+      maxTextureDimension2D: Math.min(8192, adapterLimits.maxTextureDimension2D),
+      maxBufferSize: Math.min(256 * 1024 * 1024, adapterLimits.maxBufferSize)
+    };
+
     this.device = await adapter.requestDevice({
-      requiredLimits: {
-        maxBindGroups: 8,
-        maxTextureDimension2D: 8192,
-        maxBufferSize: 256 * 1024 * 1024 // 256MB
-      }
+      requiredLimits: requestedLimits as any
     });
 
     // 컨텍스트 구성
