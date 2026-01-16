@@ -9,6 +9,8 @@ export class GPURenderer {
   public config!: RenderConfig;
   private commandEncoder: GPUCommandEncoder | null = null;
   private renderPassDescriptor: GPURenderPassDescriptor | null = null;
+  private renderPipeline: GPURenderPipeline | null = null;
+  private vertexBuffer: GPUBuffer | null = null;
 
   constructor(private canvas: HTMLCanvasElement) {}
 
@@ -68,6 +70,83 @@ export class GPURenderer {
     this.renderPassDescriptor = {
       colorAttachments: colorAttachments
     };
+
+    // 기본 테스트 렌더 파이프라인 생성
+    await this.createTestPipeline();
+  }
+
+  private async createTestPipeline() {
+    // 간단한 테스트 삼각형 버텍스 데이터
+    const vertices = new Float32Array([
+      // x, y (NDC 좌표)
+      0.0,  0.5,   // 상단
+      -0.5, -0.5,  // 왼쪽 하단
+      0.5,  -0.5,  // 오른쪽 하단
+    ]);
+
+    this.vertexBuffer = this.device.createBuffer({
+      label: 'Test Triangle Vertices',
+      size: vertices.byteLength,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
+    this.device.queue.writeBuffer(this.vertexBuffer, 0, vertices);
+
+    // 셰이더 모듈
+    const vertexShader = this.device.createShaderModule({
+      label: 'Test Vertex Shader',
+      code: `
+        @vertex
+        fn vs_main(@location(0) position: vec2<f32>) -> @builtin(position) vec4<f32> {
+          return vec4<f32>(position, 0.0, 1.0);
+        }
+      `,
+    });
+
+    const fragmentShader = this.device.createShaderModule({
+      label: 'Test Fragment Shader',
+      code: `
+        @fragment
+        fn fs_main() -> @location(0) vec4<f32> {
+          return vec4<f32>(0.3, 0.6, 1.0, 1.0); // 밝은 파란색
+        }
+      `,
+    });
+
+    // 렌더 파이프라인
+    this.renderPipeline = this.device.createRenderPipeline({
+      label: 'Test Render Pipeline',
+      layout: 'auto',
+      vertex: {
+        module: vertexShader,
+        entryPoint: 'vs_main',
+        buffers: [
+          {
+            arrayStride: 2 * 4, // vec2<f32> = 8 bytes
+            attributes: [
+              {
+                shaderLocation: 0,
+                offset: 0,
+                format: 'float32x2',
+              },
+            ],
+          },
+        ],
+      },
+      fragment: {
+        module: fragmentShader,
+        entryPoint: 'fs_main',
+        targets: [
+          {
+            format: (navigator.gpu as any).getPreferredCanvasFormat 
+              ? (navigator.gpu as any).getPreferredCanvasFormat()
+              : 'bgra8unorm',
+          },
+        ],
+      },
+      primitive: {
+        topology: 'triangle-list',
+      },
+    });
   }
 
   beginFrame() {
@@ -81,6 +160,20 @@ export class GPURenderer {
     }
 
     this.commandEncoder = this.device.createCommandEncoder();
+    
+    // 렌더 패스 시작
+    if (this.renderPassDescriptor && this.renderPipeline) {
+      const renderPass = this.commandEncoder.beginRenderPass(this.renderPassDescriptor);
+      
+      // 테스트 삼각형 그리기
+      if (this.renderPipeline && this.vertexBuffer) {
+        renderPass.setPipeline(this.renderPipeline);
+        renderPass.setVertexBuffer(0, this.vertexBuffer);
+        renderPass.draw(3); // 3개 버텍스
+      }
+      
+      renderPass.end();
+    }
   }
 
   endFrame() {
